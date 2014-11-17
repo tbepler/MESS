@@ -1,18 +1,58 @@
+import sys
+
+from Bio import Entrez
 
 # fasta sequence = ( name, sequence )
 
 def parseGeneFile( f ):
-	#TODO call parseGeneIds on each gene id in f
-	raise NotImplementedError
+	# call parseGeneIds on each gene id in f 
+    return parseGeneIds((line.strip() for line in f))
+
+def setEmail(email):
+    # set email
+    Entrez.email = email
 
 def parseGeneIds( geneIds ):
-	#TODO return generator that provides gene sequences in fasta format
-	raise NotImplementedError
+	# return generator that provides gene sequences in fasta format 
+    setEmail("yhtgrace@gmail.com")
+    for geneId in geneIds:
+        handle = Entrez.efetch(db="nucleotide", id=geneId, retmode="fasta", rettype="text")
+        # FIXME handle exceptions if id not found 
+        yield (geneId, "".join(handle.read().split('\n')[1:]))
 
 def parseFastaFile( f ):
-	#TODO return generator that provides each sequence
-	raise NotImplementedError
+	# return generator that provides each sequence
+    # from http://stackoverflow.com/questions/7654971/
+    name, seq = None, []
+    for line in f:
+        line = line.rstrip()
+        if line[0] == '>':
+            if name: yield (name, ''.join(seq))
+            name, seq = line[1:], []
+        else:
+            seq.append(line)
+    if name: yield(name, ''.join(seq))
 
 def getParser( f ):
-	#TODO returns a parsing function appropriate for parsing the given file format
-	raise NotImplementedError
+	# returns a parsing function appropriate for parsing the given file format
+    line = f.readline()
+    f.seek(0)
+    if line[0] == '>':
+        return parseFastaFile(f)
+    else:
+        return parseGeneFile(f)
+
+def main():
+    test_gene = "../MESS_test/GSE29780_p0-05_down.gene_ids.txt"
+    with open(test_gene) as f:
+        it = getParser(f)
+        record = it.next()
+        print >> sys.stderr, record
+    test_fa = "../MESS_test/test.fa"
+    with open(test_fa) as f:
+        it = getParser(f)
+        record = it.next()
+        print >> sys.stderr, record
+
+if __name__ == '__main__':
+    main()
