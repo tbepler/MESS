@@ -2,7 +2,7 @@ import sys
 
 from Bio import Entrez
 
-# fasta sequence = ( name, sequence )
+#TODO return sequences in the form ( name, fold change, sequence )
 
 def parseGeneFile( f ):
 	# call parseGeneIds on each gene id in f 
@@ -33,8 +33,8 @@ def parseFastaFile( f ):
             seq.append(line)
     if name: yield(name, ''.join(seq))
 
-def getParser( f ):
-	# returns a parsing function appropriate for parsing the given file format
+def parse( f ):
+	# parses the given file
     line = f.readline()
     f.seek(0)
     if line[0] == '>':
@@ -45,12 +45,12 @@ def getParser( f ):
 def main():
     test_gene = "../MESS_test/GSE29780_p0-05_down.gene_ids.txt"
     with open(test_gene) as f:
-        it = getParser(f)
+        it = parse(f)
         record = it.next()
         print >> sys.stderr, record
     test_fa = "../MESS_test/test.fa"
     with open(test_fa) as f:
-        it = getParser(f)
+        it = parse(f)
         record = it.next()
         print >> sys.stderr, record
 
