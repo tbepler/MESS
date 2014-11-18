@@ -1,55 +1,59 @@
 import sys
 
+from itertools import izip
+
 from Bio import Entrez
 
 #TODO return sequences in the form ( name, fold change, sequence )
 
 def parseGeneFile( f ):
-	# call parseGeneIds on each gene id in f 
-    return parseGeneIds((line.strip() for line in f))
+    # call fetchSeq on each gene id in f, which has is in tab-delimited format
+    # (gene_id, score)
+    for line in f:
+        geneId, score = line.strip().split()
+        yield (geneId, float(score), fetchSeq(geneId))
 
-def setEmail(email):
+def setEmail( email ):
     # set email
     Entrez.email = email
 
-def parseGeneIds( geneIds ):
-	# return generator that provides gene sequences in fasta format 
-    setEmail("yhtgrace@gmail.com")
-    for geneId in geneIds:
-        handle = Entrez.efetch(db="nucleotide", id=geneId, retmode="fasta", rettype="text")
-        # FIXME handle exceptions if id not found 
-        yield (geneId, "".join(handle.read().split('\n')[1:]))
+def fetchSeq( geneId ):
+    handle = Entrez.efetch(db="nucleotide", id=geneId, retmode="fasta", rettype="text")
+    return handle.read().partition('\n')[-1].replace('\n', '')
 
-def parseFastaFile( f ):
-	# return generator that provides each sequence
-    # from http://stackoverflow.com/questions/7654971/
-    name, seq = None, []
+def parseGEO2R( f ):
+    # parse GEO2R output
     for line in f:
-        line = line.rstrip()
-        if line[0] == '>':
-            if name: yield (name, ''.join(seq))
-            name, seq = line[1:], []
-        else:
-            seq.append(line)
-    if name: yield(name, ''.join(seq))
+        logFC, geneIds = line.strip().split()[5:7]
+        logFC = float(logFC[1:-1])
+        geneId = geneIds[1:-1].split(',')[0]
+        if not geneId:
+            continue
+        yield (geneId, float(logFC), fetchSeq(geneId))
 
 def parse( f ):
-	# parses the given file
+    # parses the given file
     line = f.readline()
-    f.seek(0)
-    if line[0] == '>':
-        return parseFastaFile(f)
-    else:
+    if len(line.strip().split()) == 2:
+        f.seek(0)
         return parseGeneFile(f)
+    elif line.strip().split()[0] == '"ID"':
+        return parseGEO2R(f)
+    else:
+        return None # FIXME unknown file type
 
 def main():
-    test_gene = "../MESS_test/GSE29780_p0-05_down.gene_ids.txt"
-    with open(test_gene) as f:
+   
+    setEmail("yhtgrace@gmail.com") # set email first
+
+    test_2col = "../MESS_test/GSE29780_de.geneId-fc.txt"
+    with open(test_2col) as f:
         it = parse(f)
         record = it.next()
         print >> sys.stderr, record
-    test_fa = "../MESS_test/test.fa"
-    with open(test_fa) as f:
+
+    test_geo2r = "../MESS_test/GSE29780_de.txt"
+    with open(test_geo2r) as f:
         it = parse(f)
         record = it.next()
         print >> sys.stderr, record
