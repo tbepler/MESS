@@ -6,10 +6,10 @@ import bisect
 labels must be 1 and -1 where 1 is in S and -1 is not
 in S
 """
-def enrichment( weights, labels, rho = 1, nullDist = None, samples = 1000 ):
-	( es, scores ) = enrichmentScore( weights, labels, rho )
+def enrichment( weights, labels, rho = 1, nullDist = None, samples = 1000, preSorted = False ):
+	( es, scores ) = enrichmentScore( weights, labels, rho, preSorted )
 	if nullDist == None:
-		nullDist = nullDistribution( weights, labels, samples, rho )
+		nullDist = nullDistribution( weights, labels, samples, rho, preSorted )
 	s = significance( es, nullDist )
 	return ( s, es, scores )
 
@@ -24,10 +24,11 @@ def significance( es, null ):
 """labels must be either 1 or -1 for in the set
 or not in the set
 rho controls step weight as w^rho"""
-def enrichmentScore( weights, labels, rho = 1 ):
+def enrichmentScore( weights, labels, rho = 1, preSorted = False ):
 	assert len(weights) == len(labels)
 	data = zip( weights, labels )
-	data.sort( reverse = True )
+	if not preSorted:
+		data.sort( reverse = True )
 	
 	expected = float( sum( labels ) ) / float( len (labels ) )
 	scores = []
@@ -44,13 +45,14 @@ def enrichmentScore( weights, labels, rho = 1 ):
 
 	return es, scores
 
-def nullDistribution( weights, labels, samples = 1000, rho = 1 ):
+def nullDistribution( weights, labels, samples = 1000, rho = 1, preSorted = False ):
 	scores = []
-	weights = sorted( weights, reverse = True )
+	if not preSorted:
+		weights = sorted( weights, reverse = True )
 	labels = copy.copy( labels )
 	for _ in range( samples ):
 		random.shuffle(labels)
-		( es, _ ) = enrichmentScore( weights, labels, rho )
+		( es, _ ) = enrichmentScore( weights, labels, rho, preSorted = True )
 		scores.append( es )
 	scores.sort()
 	return scores

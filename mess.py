@@ -29,31 +29,75 @@ def parseArgs( args ):
 		i += 1
 	return motifFiles, seqFiles, cutoff
 
-def occurrences( pwm, seq, cutoff ):
-	scores = pwm.scoreAll( seq )
-	#print scores
-	occ = 0
-	for s in scores:
-		if s > cutoff: occ += 1
-	return occ
 
-def enrichment( pwm, seqFile, logLikelihoodCutoff ):
-	seqs = [ (foldChange, s) for (_,foldChange,s) in Parser.parse( open( seqFile, 'r' ) ) ] 
-	seqs.sort( revers = True )
+def unzip( xs ):
+	return ( [ a for a,b in xs ] , [ b for a,b in xs ] )
 
-	motif = {}
-	for (foldChange, seq) in seqs:
-		bg = PWM.nucleotideFrequency( seq )
-		pwmAdj = pwm.adjustToBG( bg )
-		motif[ seq ] = occurrences( pwmAdj, seq, logLikelihoodCutoff ) > 0
-
+def motifEnrichment( seqSet, pwm, logLikelihoodCutoff, bgs = None, isSorted = False ):
+	if bgs == None:
+		bgs = [ PWM.nucleotideFrequency( s ) for (_,s) in seqSet ]
+	assert len( seqSet ) == len( bgs )
 	
+	data = []
+	for i in range( len( seqSet ) ):
+		(fc, s) = seqSet[i]
+		pwmAdj = pwm.adjustToBG( bgs[i] )
+		#print pwmAdj.scoreAll( s )
+		label = 1 if pwmAdj.occurs( s, logLikelihoodCutoff ) else -1
+		#print label
+		data.append( (fc, label) )
+	
+	if not isSorted:
+		data.sort( reverse = True )
+	
+	( w, l ) = unzip( data )
+	#( sig, es, posScores ) = Enrichment.enrichment( w, l, preSorted = True )	
+	return Enrichment.enrichment( w, l, preSorted = True )
+
+def parseSeqFile( seqFile ):
+	seqs = [ (foldChange, s) for (_,foldChange,s) in Parser.parse( open( seqFile, 'r' ) ) ] 
+	seqs.sort( reverse = True )
+	return seqs
 		
+def computeMotifEnrichments( seqFiles, pwms, logLikelihoodCutoff ):
+	reports = []
+	for f in seqFiles:
+		seqSet = parseSeqFile( f )
+		bgs = [ PWM.nucleotideFrequency( s ) for (_,s) in seqSet ]
+		es = [ motifEnrichment( seqSet, pwm, logLikelihoodCutoff, bgs, True ) for pwm in pwms  ]
+		reports.append( es )
+	return reports	
+
+def printReport( motifFiles, report, header = True ):
+	assert len( motifFiles ) == len( report )
+	assert len( report ) > 0
+	
+	#print header
+	if header:
+		print 'PWM', 'Significance', 'ES',
+		( _, _, pos ) = report[0]
+		for i in range( len( pos ) ):
+			print i+1,
+		print ''
+	
+	#print report
+	for i in range( len( report ) ):
+		( sig, es, pos ) = report[i]
+		print motifFiles[i], sig, es,
+		for s in pos:
+			print s,
+		print ''
+	
 
 def main( args ):
 	#do stuff
 	motifFiles, seqFiles, cutoff = parseArgs( args )
 	pwms = [ PWM.parsePFM( open( f, 'r' ) ) for f in motifFiles ]
+	
+	reports = computeMotifEnrichments( seqFiles, pwms, cutoff )
+	for i in range( len( reports ) ):
+		print seqFiles[i]
+		printReport( motifFiles, reports[i] )	
 	
 	"""
 	testSeq = 'TCGAATATTACGA'

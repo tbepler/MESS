@@ -1,38 +1,63 @@
 import math
+import random
 from collections import Counter
 
 
 class PositionWeightMatrix:
+
 	def __init__(self,scores,length):
 		self._struct = scores
 		self._n = length
 		self._alphabet = scores.keys()
 		self._alphabet.sort()
+
 	def __eq__(self,other):
 		return pwmEq(self._struct, other._struct, 0)
+
 	def __hash__(self):
 		h = 5
 		for c in self._alphabet:
 			for j in range(len(self._struct[i])):
 				h = h*11 + hash(self._struct[c][j])
 		return h
+
 	def __getitem__(self, i):
 		return self._struct[i]
+
 	def length(self):
 		return self._n
+
 	def __len__(self):
 		return self._n
+
 	def score(self, s):
 		assert len(s) == self.length()
 		return sum( [ self._struct[s[i]][i] for i in range(len(s)) ] )
+
 	def scoreAll(self, s):
 		assert len(s) >= self.length()
 		return [ self.score( s[i:i+self.length()] ) for i in range( len(s) - self.length() + 1 ) ]
-			
+
+	def occurs( self, seq, cutoff = 0 ):
+		assert len(seq) >= self.length()
+		for i in range( len(seq) - self.length() + 1 ):
+			if self.score( seq[i:i+self.length()] ) > cutoff:
+				return True
+		return False
+
+	def occurrences( self, seq, cutoff = 0 ):
+		scores = self.scoreAll( seq )
+		occ = 0
+		for s in scores:
+			if s > cutoff: occ += 1
+		return occ
+	
 	def alphabet(self):
 		return self._alphabet
+
 	def adjustToBG( self, bg ):
 		return adjustToBG( self, bg )
+
 	def __str__(self):
 		L = self.length()
 		s = "  "
@@ -77,7 +102,18 @@ def parseBG( bgF ):
 def nucleotideFrequency( seq, pseudocount = 0 ):
 	counts = Counter( seq.upper().strip() )
 	addedCounts = len( counts ) * pseudocount;
-	return { x : float( counts[x] + pseudocount ) / float( len( seq ) + addedCounts ) for x in counts.keys() }
+	denom = float( len(seq) ) + addedCounts
+	for (k,n) in counts.iteritems():
+		counts[k] = float( n + pseudocount ) / denom
+	return counts
+
+def nullScoreDistribution( pwm, seq, reps = 1000 ):
+	scores = []
+	for _ in range( reps ):
+		shuf = ''.join( random.sample( seq, len( seq ) ) )
+		scores.extend( pwm.scoreAll( shuf ) )
+	scores.sort()
+	return scores
 
 def parseProbabilities( f ):
 	m = {}

@@ -31,6 +31,15 @@ def parseGEO2R( f ):
             continue
         yield (geneId, float(logFC), fetchSeq(geneId))
 
+def parseBasicDelim( f ):
+	for line in f:
+		name, fc, seq = line.strip().split()
+		try:
+			fc = float(fc)
+		except ValueError:
+			continue
+		yield ( name, fc, seq )
+
 def parse( f ):
     # parses the given file
     line = f.readline()
@@ -39,6 +48,8 @@ def parse( f ):
         return parseGeneFile(f)
     elif line.strip().split()[0] == '"ID"':
         return parseGEO2R(f)
+    elif len( line.strip().split() ) == 3:
+	return parseBasicDelim( f )
     else:
         return None # FIXME unknown file type
 
