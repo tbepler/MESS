@@ -1,4 +1,5 @@
 import sys
+import random
 import PositionWeightMatrix as PWM
 import Parser
 import Enrichment
@@ -61,15 +62,38 @@ def main( args ):
 		print p.scoreAll( testSeq )
 		print occurrences( p, testSeq, 0 )
 	"""	
-
+	
+	"""
+	random.seed(2)
+	
 	testWeights = [ 5, 4, 3, 2, 1, 0, -1, -2, -3, -4, -5 ]
 	testLabels = [ 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, -1 ]
-	print Enrichment.enrichment( testWeights, testLabels )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 0 )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 1 )
+	
+	testLabels = [ -1 * x for x in testLabels ]
+	print Enrichment.enrichment( testWeights, testLabels , rho = 0 )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 1 )
+	
 	
 	testWeights = [ 5, 4, 3, 2, 1, 0, -1, -2, -3, -4, -5 ]
 	testLabels = [ 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1 ]
-	print Enrichment.enrichment( testWeights, testLabels )
-
+	print Enrichment.enrichment( testWeights, testLabels , rho = 0 )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 1 )
+	
+	testLabels = [ -1 * x for x in testLabels ]
+	print Enrichment.enrichment( testWeights, testLabels , rho = 0 )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 1 )
+	
+	testWeights = [ 5, 4, 3, 2, 1, 0, -1, -2, -3, -4, -5 ]
+	testLabels = [ -1, 1, -1, -1, -1, -1, 1, -1, 1, -1, -1 ]
+	print Enrichment.enrichment( testWeights, testLabels , rho = 0 )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 1 )
+	
+	testLabels = [ -1 * x for x in testLabels ]
+	print Enrichment.enrichment( testWeights, testLabels , rho = 0 )
+	print Enrichment.enrichment( testWeights, testLabels, rho = 1 )
+	"""
 
 if __name__ == '__main__':
 	main( sys.argv[1:] )
