@@ -35,11 +35,12 @@ class PositionWeightMatrix( PWM.PositionWeightMatrix ):
 		return False
 
 	def occurrences( self, seq, cutoff = 0 ):
-		scores = self.scoreAll( seq )
-		occ = 0
-		for s in scores:
-			if s > cutoff: occ += 1
-		return occ
+		return sum( 1 for s in self.scoreAll( seq ) if s > cutoff )
+		#scores = self.scoreAll( seq )
+		#occ = 0
+		#for s in scores:
+		#	if s > cutoff: occ += 1
+		#return occ
 
 	def alphabetSize(self):
 		return len( self._alphabet )
