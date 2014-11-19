@@ -1,15 +1,16 @@
 import random
 import copy
 import bisect
+import multiprocessing
 
 """ returns significance, enrichment score, rank scores
 labels must be 1 and -1 where 1 is in S and -1 is not
 in S
 """
-def enrichment( weights, labels, rho = 1, nullDist = None, samples = 1000, preSorted = False ):
+def enrichment( weights, labels, rho = 1, nullDist = None, samples = 1000, preSorted = False, tPool = None ):
 	( es, scores ) = enrichmentScore( weights, labels, rho, preSorted )
 	if nullDist == None:
-		nullDist = nullDistribution( weights, labels, samples, rho, preSorted )
+		nullDist = nullDistribution( weights, labels, samples, rho, preSorted, tPool )
 	s = significance( es, nullDist )
 	return ( s, es, scores )
 
@@ -45,15 +46,29 @@ def enrichmentScore( weights, labels, rho = 1, preSorted = False ):
 
 	return es, scores
 
-def nullDistribution( weights, labels, samples = 1000, rho = 1, preSorted = False ):
+class Score(object):
+	def __init__(self, weights, labels, rho, preSorted):
+		self.w = weights
+		self.l = labels
+		self.r = rho
+		self.s = preSorted
+	def __call__(self, _):
+		labels = random.sample( self.l, len( self.l ) )
+		(es, _) = enrichmentScore( self.w, labels, self.r, self.s)
+		return es
+
+def nullDistribution( weights, labels, samples = 1000, rho = 1, preSorted = False, tPool = None ):
 	scores = []
 	if not preSorted:
 		weights = sorted( weights, reverse = True )
 	labels = copy.copy( labels )
-	for _ in range( samples ):
-		random.shuffle(labels)
-		( es, _ ) = enrichmentScore( weights, labels, rho, preSorted = True )
-		scores.append( es )
+	if tPool != None:
+		scores = tPool.map( Score( weights, labels, rho, preSorted ), xrange( samples ) )
+	else:
+		for _ in range( samples ):
+			random.shuffle(labels)
+			( es, _ ) = enrichmentScore( weights, labels, rho, preSorted = True )
+			scores.append( es )
 	scores.sort()
 	return scores
 

@@ -1,5 +1,7 @@
 import math
 import random
+import multiprocessing
+import itertools
 from collections import Counter
 
 
@@ -10,7 +12,8 @@ class PositionWeightMatrix:
 		self._n = length
 		self._alphabet = scores.keys()
 		self._alphabet.sort()
-
+		#self._scores = {  for kmer in itertools.product( self._alphabet, repeat = self._n ) }	
+	
 	def __eq__(self,other):
 		return pwmEq(self._struct, other._struct, 0)
 
@@ -30,13 +33,23 @@ class PositionWeightMatrix:
 	def __len__(self):
 		return self._n
 
-	def score(self, s):
-		assert len(s) == self.length()
-		return sum( [ self._struct[s[i]][i] for i in range(len(s)) ] )
+	def score(self, seq):
+		#assert len(seq) == self.length()
+		return sum( self._struct[seq[i]][i] for i in xrange( len( seq ) ) )
+		s = 0
+		for i in range( len( seq ) ):
+			s += self._struct[ seq[i] ][i]
+		return s
+		#return sum( [ self._struct[seq[i]][i] for i in range(len(seq)) ] )
 
-	def scoreAll(self, s):
+	def scoreAll(self, s ):
 		assert len(s) >= self.length()
-		return [ self.score( s[i:i+self.length()] ) for i in range( len(s) - self.length() + 1 ) ]
+		#if tPool != None:
+		#	return tPool.map( Score(self,s) , xrange( len(s) - self.length() + 1 ) )
+		struct = self._struct
+		n = len(s) - len(self) + 1
+		m = xrange( len( self ) )
+		return ( sum( struct[s[i+j]][j] for j in m ) for i in xrange( n ) )
 
 	def occurs( self, seq, cutoff = 0 ):
 		assert len(seq) >= self.length()
@@ -70,6 +83,13 @@ class PositionWeightMatrix:
 				s += " %5.3f" % self._struct[c][i]
 			s += "\n"
 		return s
+
+class Score(object):
+	def __init__(self, pwm, s):
+		self.pwm = pwm
+		self.s = s
+	def __call__(self, i):
+		return self.pwm.score( self.s[i:i+len(self.pwm)] )
 
 def pwmEq(pwm1,pwm2,tolerance):
     for i in pwm1.keys():
@@ -107,13 +127,71 @@ def nucleotideFrequency( seq, pseudocount = 0 ):
 		counts[k] = float( n + pseudocount ) / denom
 	return counts
 
-def nullScoreDistribution( pwm, seq, reps = 1000 ):
-	scores = []
-	for _ in range( reps ):
-		shuf = ''.join( random.sample( seq, len( seq ) ) )
-		scores.extend( pwm.scoreAll( shuf ) )
+class Sample(object):
+	def __init__(self, seq, pwm):
+		self.seq = seq
+		self.pwm = pwm
+	def __call__(self, _):
+		global S
+		global Scoring
+		s = time.clock()
+		shuf = ''.join( random.sample( self.seq, len(self.seq) ) )
+		S += time.clock() - s
+		s = time.clock()
+		scores = self.pwm.scoreAll( shuf )
+		Scoring += time.clock() - s
+		return scores
+
+import time
+T = 0
+S = 0
+Sorting = 0
+Scoring = 0
+
+def shuffleAndScore( pwm, shuf ):
+	#global S
+	#global Scoring
+	#s2 = time.clock()
+	random.shuffle( shuf )
+	#S += time.clock() - s2
+	#s2 = time.clock()
+	shufScores = pwm.scoreAll( shuf )
+	#Scoring += time.clock() - s2
+	#print [ s for s in shufScores ]
+	return shufScores
+
+def nullScoreDistribution( pwm, seq, reps = 1000, tPool = None ):
+	#global T
+	#global S
+	#global Sorting
+	#global Scoring
+	#s = time.clock()
+	#if tPool != None:
+	#	scores = tPool.map( Sample( seq, pwm ), xrange( reps ) )
+	#	scores = list( itertools.chain.from_iterable( scores ) ) 
+	#else:
+	shuf = list( seq )
+	
+	#s2 = time.clock()		
+	scores = list( itertools.chain( *(shuffleAndScore( pwm, shuf ) for _ in xrange( reps ) ) ) )
+	#print len(scores)
+	#Scoring += time.clock() - s2
+	
+	#s3 = time.clock()
 	scores.sort()
+	#Sorting += time.clock() - s3
+	#T += time.clock() - s
 	return scores
+
+def scoreCutoff( nullDist, pval ):
+	i = float( len( nullDist ) ) -  pval * len( nullDist )
+	upper = int( math.ceil( i ) ) 
+	lower = int( math.floor( i ) )
+	if upper == lower:
+		return nullDist[upper]
+	wl = float( upper ) - i
+	wu = i - float( lower )
+	return wu * nullDist[upper] + wl * nullDist[lower]
 
 def parseProbabilities( f ):
 	m = {}

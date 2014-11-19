@@ -33,12 +33,14 @@ def parseGEO2R( f ):
 
 def parseBasicDelim( f ):
 	for line in f:
-		name, fc, seq = line.strip().split()
-		try:
-			fc = float(fc)
-		except ValueError:
-			continue
-		yield ( name, fc, seq )
+		line = line.strip()
+		if len( line ) > 0:
+			name, fc, seq = line.split()
+			try:
+				fc = float(fc)
+			except ValueError:
+				continue
+			yield ( name, fc, seq )
 
 def parse( f ):
     # parses the given file
