@@ -1,6 +1,6 @@
 import sys
 import random
-import PositionWeightMatrix as PWM
+import PyPositionWeightMatrix as PWM
 import Parser
 import Enrichment
 import multiprocessing
@@ -45,18 +45,24 @@ class Label(object):
 	def __init__(self, seqSet, bgs, pwm, cutoff):
 		self.seqSet = seqSet
 		self.bgs = bgs
+		#print pwm
 		self.pwm = pwm
+		#print self.pwmI
 		self.cutoff = cutoff
 
 	def __call__(self, i):
+		#print self.pwm
 		(fc, s) = self.seqSet[i]
+		#print self.pwm
 		label = labelSequence( s, self.bgs[i], self.pwm, self.cutoff )
 		#print >> sys.stderr, PWM.T,PWM.S,PWM.Sorting,PWM.Scoring
-		return (fc,label)	
+		return (fc,label)
 
 def labelSequence( s, bg, pwm, cutoff ):
+	#print pwm
 	#adjust the PWM to the sequence background nucleotide frequency
 	pwmAdj = pwm.adjustToBG( bg )
+	#print pwmAdj
 	#estimate log likelihood cutoff from sampled null distribution
 	nullDist = PWM.nullScoreDistribution( pwmAdj, s )
 	scoreCutoff = PWM.scoreCutoff( nullDist, cutoff )
@@ -65,17 +71,24 @@ def labelSequence( s, bg, pwm, cutoff ):
 	return label
 
 def motifEnrichment( seqSet, pwm, cutoff, bgs = None, isSorted = False, tPool = None ):
+	
+	#print pwm
+
 	if bgs == None:
 		bgs = [ PWM.nucleotideFrequency( s ) for (_,s) in seqSet ]
 	assert len( seqSet ) == len( bgs )
 	
 	if tPool != None:
+		#args = [ ( seqSet[i][1], bgs[i], pwm, cutoff ) for i in xrange( len( seqSet ) ) ]
+		#data = tPool.map( labelSequence, args )
+		#data = [ ( seqSet[i][0], data[i] ) for i in xrange( len( data ) ) ]
 		data = tPool.map( Label( seqSet, bgs, pwm, cutoff ), xrange( len( seqSet ) ) )
 	else:
 		data = []
 		for i in range( len( seqSet ) ):
 			(fc, s) = seqSet[i]
 			label = labelSequence( s, bgs[i], pwm, cutoff )
+			#fc,label = Label( seqSet, bgs, pwm, cutoff ) ( i )
 			data.append( (fc, label) )
 	
 	if not isSorted:
@@ -85,9 +98,13 @@ def motifEnrichment( seqSet, pwm, cutoff, bgs = None, isSorted = False, tPool = 
 	#( sig, es, posScores ) = Enrichment.enrichment( w, l, preSorted = True )	
 	return Enrichment.enrichment( w, l, preSorted = True, tPool = tPool )
 
-def parseSeqFile( seqFile ):
-	seqs = [ (foldChange, s) for (_,foldChange,s) in Parser.parse( open( seqFile, 'r' ) ) ] 
+def translate( seq, alphabet ):
+	return [ alphabet[c] for c in seq ]
+
+def parseSeqFile( seqFile, alphabet ):
+	seqs = [ (foldChange, translate(s,alphabet)) for (_,foldChange,s) in Parser.parse( open( seqFile, 'r' ) ) ] 
 	seqs.sort( reverse = True )
+	
 	return seqs
 		
 class EnrichmentCalculator(object):
@@ -104,16 +121,18 @@ def nucleotideFrequency( seqEntry ):
 	_,s = seqEntry
 	return PWM.nucleotideFrequency(s)
 
-def computeMotifEnrichments( seqFiles, pwms, cutoff, tPool = None ):
+def alphabetListToDict( alph ):
+	return { c : i for ( i, c ) in enumerate( alph ) }
+
+def computeMotifEnrichments( seqFiles, pwms, cutoff, alphabet, tPool = None ):
+	alphDict = alphabetListToDict( alphabet )
 	for f in seqFiles:
-		seqSet = parseSeqFile( f )
+		seqSet = parseSeqFile( f, alphDict )
 		if tPool != None:
 			bgs = tPool.map( nucleotideFrequency, seqSet )
 		else:
 			bgs = [ PWM.nucleotideFrequency( s ) for (_,s) in seqSet ]
-		#if tPool != None:
-		#	report = tPool.map( EnrichmentCalculator( seqSet, cutoff, bgs ) , pwms )
-		#else:
+		
 		report =  [ motifEnrichment( seqSet, pwm, cutoff, bgs = bgs, isSorted = True, tPool = tPool ) for pwm in pwms  ]
 		yield f , report
 
@@ -142,11 +161,14 @@ def main( args ):
 	#do stuff
 	motifFiles, seqFiles, cutoff, pool = parseArgs( args )
 	pwms = [ PWM.parsePFM( open( f, 'r' ) ) for f in motifFiles ]
+	#for pwm in pwms:
+	#	print pwm
+	alphabet = pwms[0].alphabet()
 	
 	#pool = multiprocessing.pool.ThreadPool( processes = 4 )
 	#pool = multiprocessing.Pool( processes = 4 )
 
-	for f, report in computeMotifEnrichments( seqFiles, pwms, cutoff, pool ):
+	for f, report in computeMotifEnrichments( seqFiles, pwms, cutoff, alphabet, pool ):
 		print f
 		printReport( motifFiles, report )	
 

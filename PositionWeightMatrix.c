@@ -170,9 +170,9 @@ inline static double score( double** matrix, int n, int m, PyObject** elems )
 	double score = 0;
 	int i;
 	int j;
-	for( j = 0 ; j < m ; ++j )
+	for( i = 0 ; i < n ; ++i )
 	{
-		i = ( int ) PyInt_AsLong( elems[ j ] );
+		j = ( int ) PyInt_AsLong( elems[ i ] );
 		//should check for error here
 		//if( PyErr_Occurred() )
 		score += matrix[i][j];
@@ -186,9 +186,9 @@ inline static double scoreFromIndex( double** matrix, int n, int m, PyObject** e
 	double score = 0;
 	int i;
 	int j;
-	for( j = 0 ; j < m ; ++j )
+	for( i = 0 ; i < n ; ++i )
 	{
-		i = ( int ) PyInt_AsLong( elems[ j + start ] );
+		j = ( int ) PyInt_AsLong( elems[ i + start ] );
 		//should check for error here
 		//if( PyErr_Occurred() )
 		score += matrix[i][j];
@@ -207,7 +207,7 @@ static PyObject * PositionWeightMatrix_score( PositionWeightMatrix* self, PyObje
 	int m = self -> m;
 	int len = PySequence_Fast_GET_SIZE( seq );
 	//check that length is correct
-	if( m != len )
+	if( n != len )
 	{
 		//TODO raise error
 		return NULL;
@@ -242,7 +242,7 @@ static PyObject* PositionWeightMatrix_scoreAll( PositionWeightMatrix* self, PyOb
 	int m = self -> m;
 	int len = PySequence_Fast_GET_SIZE( seq );
 	//check that length is correct
-	if( m > len )
+	if( n > len )
 	{
 		//TODO raise error
 		return NULL;
@@ -251,7 +251,7 @@ static PyObject* PositionWeightMatrix_scoreAll( PositionWeightMatrix* self, PyOb
 	PyObject** elems = PySequence_Fast_ITEMS( seq );
 	
 	//create new python list and fill it with the scores at each position
-	int end = len - m + 1;
+	int end = len - n + 1;
 	PyObject* list = PyList_New( end );
 	int i;
 	for( i = 0 ; i < end ; ++i )
@@ -264,12 +264,93 @@ static PyObject* PositionWeightMatrix_scoreAll( PositionWeightMatrix* self, PyOb
 
 static PyObject* PositionWeightMatrix_length( PositionWeightMatrix* self )
 {
-	return PyInt_FromLong( self -> m );
+	return PyInt_FromLong( self -> n );
 }
 
 static Py_ssize_t PositionWeightMatrix_len( PositionWeightMatrix* self )
 {
-	return self -> m;
+	return self -> n;
+}
+
+static PyObject* PositionWeightMatrix_getItem( PositionWeightMatrix* self, Py_ssize_t i )
+{
+	//return the jth column of the matrix as a python list
+	double** matrix = self -> matrix;
+	int n = self -> n;
+	int m = self -> m;
+	
+	if( i < 0 || i >= n )
+	{
+		//TODO raise error
+		return NULL;
+	}
+
+	PyObject* list = PyList_New( m );
+	int j;
+	for( j = 0 ; j < m ; ++j )
+	{
+		PyList_SetItem( list, j, PyFloat_FromDouble( matrix[i][j] ) );
+	}
+	return list;
+}
+
+static PyObject* PositionWeightMatrix_toList( PositionWeightMatrix* self )
+{
+	double** matrix = self -> matrix;
+	int n = self -> n;
+	int m = self -> m;
+	
+	PyObject* list = PyList_New( n );
+	PyObject* row;
+	int i;
+	int j;
+	for( i = 0 ; i < n ; ++i )
+	{
+		row = PyList_New( m );
+		for( j = 0 ; j < m ; ++j )
+		{
+			PyList_SetItem( row, j, PyFloat_FromDouble( matrix[i][j] ) );
+		}
+		PyList_SetItem( list, i, row );
+	}	
+	return list;
+}
+
+static PyTypeObject PositionWeightMatrixType;
+
+static PyObject* PositionWeightMatrix_copy( PositionWeightMatrix* self )
+{
+	//PyObject* args = PositionWeightMatrix_toList( self );
+	//PyObject* tuple = PyTuple_Pack( 1, args );
+	//PyObject* copy = PyObject_CallObject( (PyObject*) &PositionWeightMatrixType, tuple );
+	//Py_DECREF( args );
+	//Py_DECREF( tuple );
+	//return copy;
+	return (PyObject*) self;
+}
+
+static PyObject* PositionWeightMatrix_deepcopy( PositionWeightMatrix* self, PyObject* kywds )
+{
+	PyObject* args = PositionWeightMatrix_toList( self );
+	PyObject* tuple = PyTuple_Pack( 1, args );
+	PyObject* copy = PyObject_CallObject( (PyObject*) &PositionWeightMatrixType, tuple );
+	Py_DECREF( args );
+	Py_DECREF( tuple );
+	return copy;
+	
+	//return (PyObject*) self;
+}
+
+static PyObject* PositionWeightMatrix_reduce( PositionWeightMatrix* self )
+{
+	//returns tuple of ( type, constructor args )
+	PyObject* args = PositionWeightMatrix_toList( self );
+	PyObject* tuple = PyTuple_Pack( 2, &PositionWeightMatrixType, PyTuple_Pack( 1, args ) );
+	//PyObject* copy = PyObject_CallObject( (PyObject*) &PositionWeightMatrixType, tuple );
+	//Py_DECREF( args );
+	//Py_DECREF( tuple );
+	return tuple;
+	
 }
 
 static PyMemberDef PositionWeightMatrix_members[] = {
@@ -286,11 +367,26 @@ static PyMethodDef PositionWeightMatrix_methods[] = {
 	{"length", (PyCFunction) PositionWeightMatrix_length, METH_NOARGS,
 		"Returns the length of this PWM"
 	},
+	{"toList", (PyCFunction) PositionWeightMatrix_toList, METH_NOARGS,
+		"Converts the PWM to a nested python list"
+	},
+	{"__copy__", (PyCFunction) PositionWeightMatrix_copy, METH_NOARGS,
+		"Copies this PWM"
+	},
+	{"__deepcopy__", (PyCFunction) PositionWeightMatrix_deepcopy, METH_KEYWORDS,
+		"Deeply copies this PWM"
+	},
+	{"__reduce__", (PyCFunction) PositionWeightMatrix_reduce, METH_NOARGS,
+		"Provides pickling info for this class"
+	},
 	{NULL} /* Sentinel */
 };
 
 static PySequenceMethods PositionWeightMatrix_sequence_methods = {
-	(lenfunc) PositionWeightMatrix_len,
+	(lenfunc) PositionWeightMatrix_len, /*sq_length*/
+	0, /*sq_concat*/
+	0, /*sq_repeat*/
+	(ssizeargfunc) PositionWeightMatrix_getItem /*sq_item*/
 };
 
 static PyTypeObject PositionWeightMatrixType = {

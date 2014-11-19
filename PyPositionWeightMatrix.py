@@ -1,3 +1,4 @@
+import PositionWeightMatrix as PWM
 import math
 import random
 import multiprocessing
@@ -5,51 +6,26 @@ import itertools
 from collections import Counter
 
 
-class PositionWeightMatrix:
+class PositionWeightMatrix( PWM.PositionWeightMatrix ):
 
-	def __init__(self,scores,length):
-		self._struct = scores
-		self._n = length
-		self._alphabet = scores.keys()
-		self._alphabet.sort()
-		#self._scores = {  for kmer in itertools.product( self._alphabet, repeat = self._n ) }	
+	def __init__(self,scores,alphabet):
+		super( PositionWeightMatrix, self ).__init__(scores)
+		self._alphabet = alphabet
 	
 	def __eq__(self,other):
+		#TODO update because broken
 		return pwmEq(self._struct, other._struct, 0)
 
 	def __hash__(self):
+		#TODO update and stuff
 		h = 5
 		for c in self._alphabet:
 			for j in range(len(self._struct[i])):
 				h = h*11 + hash(self._struct[c][j])
 		return h
-
-	def __getitem__(self, i):
-		return self._struct[i]
-
-	def length(self):
-		return self._n
-
-	def __len__(self):
-		return self._n
-
-	def score(self, seq):
-		#assert len(seq) == self.length()
-		return sum( self._struct[seq[i]][i] for i in xrange( len( seq ) ) )
-		s = 0
-		for i in range( len( seq ) ):
-			s += self._struct[ seq[i] ][i]
-		return s
-		#return sum( [ self._struct[seq[i]][i] for i in range(len(seq)) ] )
-
-	def scoreAll(self, s ):
-		assert len(s) >= self.length()
-		#if tPool != None:
-		#	return tPool.map( Score(self,s) , xrange( len(s) - self.length() + 1 ) )
-		struct = self._struct
-		n = len(s) - len(self) + 1
-		m = xrange( len( self ) )
-		return ( sum( struct[s[i+j]][j] for j in m ) for i in xrange( n ) )
+	
+	def __reduce__(self):
+		return  self.__class__, (self.toList(), self.alphabet())
 
 	def occurs( self, seq, cutoff = 0 ):
 		assert len(seq) >= self.length()
@@ -64,25 +40,34 @@ class PositionWeightMatrix:
 		for s in scores:
 			if s > cutoff: occ += 1
 		return occ
+
+	def alphabetSize(self):
+		return len( self._alphabet )
 	
 	def alphabet(self):
 		return self._alphabet
 
 	def adjustToBG( self, bg ):
+		#print self
 		return adjustToBG( self, bg )
 
 	def __str__(self):
-		L = self.length()
-		s = "  "
-		for i in range(L):
-			s += "%-5d " % (i+1)
-		s += "\n"
-		for c in self._alphabet:
-			s += " %s" % c
-			for i in range(L):
-				s += " %5.3f" % self._struct[c][i]
-			s += "\n"
+		s = ' '.join(self._alphabet)
+		for row in self:
+			s += '\n' + ' '.join( map( str, row ) )
 		return s
+		
+		#L = self.length()
+		#s = "  "
+		#for i in range(L):
+		#	s += "%-5d " % (i+1)
+		#s += "\n"
+		#for c in self._alphabet:
+		#	s += " %s" % c
+		#	for i in range(L):
+		#		s += " %5.3f" % self._struct[c][i]
+		#	s += "\n"
+		#return s
 
 class Score(object):
 	def __init__(self, pwm, s):
@@ -91,6 +76,7 @@ class Score(object):
 	def __call__(self, i):
 		return self.pwm.score( self.s[i:i+len(self.pwm)] )
 
+#TODO BROKE
 def pwmEq(pwm1,pwm2,tolerance):
     for i in pwm1.keys():
         if len(pwm1[i]) == len(pwm2[i]):
@@ -101,10 +87,18 @@ def pwmEq(pwm1,pwm2,tolerance):
     return True
 
 def adjustToBG(pwm,bg):
-	return PositionWeightMatrix(
-		{ c : [ pwm[c][j] - log(bg[c]) for j in range(len(pwm)) ] for c in pwm.alphabet() },
-		pwm.length() 
+	#print pwm
+	#print len( pwm )
+	#print pwm.alphabetSize()
+	#print bg
+	#update = [ [ pwm[i][j] - log(bg[j]) for j in range( pwm.alphabetSize() ) ] for i in range( len( pwm ) ) ]
+	#print update
+	pwm = PositionWeightMatrix(
+		[ [ pwm[i][j] - log(bg[j]) for j in range( pwm.alphabetSize() ) ] for i in range( len( pwm ) ) ],
+		pwm.alphabet() 
 		)
+	#print pwm
+	return pwm
 
 def log(x):
 	if x == 0: return float("-inf")
@@ -120,12 +114,15 @@ def parseBG( bgF ):
 	return [ float(counts[x])/float(length) for x in alphabet ]
 
 def nucleotideFrequency( seq, pseudocount = 0 ):
-	counts = Counter( seq.upper().strip() )
-	addedCounts = len( counts ) * pseudocount;
+	elems = max( seq )
+	bg = [ 0 for _ in xrange( elems + 1 ) ]
+	for i in seq:
+		bg[i] += 1
+	addedCounts = len( bg ) * pseudocount;
 	denom = float( len(seq) ) + addedCounts
-	for (k,n) in counts.iteritems():
-		counts[k] = float( n + pseudocount ) / denom
-	return counts
+	for i in xrange( len( bg ) ):
+		bg[i] = float( bg[i] + pseudocount ) / denom
+	return bg
 
 class Sample(object):
 	def __init__(self, seq, pwm):
@@ -142,11 +139,11 @@ class Sample(object):
 		Scoring += time.clock() - s
 		return scores
 
-import time
-T = 0
-S = 0
-Sorting = 0
-Scoring = 0
+#import time
+#T = 0
+#S = 0
+#Sorting = 0
+#Scoring = 0
 
 def shuffleAndScore( pwm, shuf ):
 	#global S
@@ -208,7 +205,6 @@ def parseProbabilities( f ):
 
 def parsePFM( f, pseudocount = 0 ):
 	bases = f.readline().strip().split()
-	pfm = [ { bases[i]:(float(s)+pseudocount) for (i,s) in enumerate(line.strip().split()) } for line in f ]
-	l = len(pfm)
-	pfm = { c:[ log( pfm[j][c] ) - log( float(sum([ pfm[j][k] for k in pfm[j].keys() ])) ) for j in range(len(pfm)) ] for c in bases }
-	return PositionWeightMatrix(pfm,l)
+	pfm = [ [ float(s)+pseudocount for s in line.strip().split() ] for line in f ]
+	pfm = [ [ log(elem) - log( sum( row ) ) for elem in row ] for row in pfm ]
+	return PositionWeightMatrix(pfm,bases)
