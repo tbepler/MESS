@@ -155,7 +155,7 @@ def computeMotifEnrichments( seqFiles, pwms, cutoff, alphabet, tPool = None ):
 		if tPool != None:
 			bgs = tPool.map( nucleotideFrequency, seqSet )
 		else:
-			bgs = [ PWM.nucleotideFrequency( s ) for (_,s) in seqSet ]
+			bgs = [ PWM.nucleotideFrequency( s ) for (_,_,s) in seqSet ]
 		
 		report =  [ motifEnrichment( seqSet, pwm, cutoff, bgs = bgs, isSorted = True, tPool = tPool ) for pwm in pwms  ]
 		yield f , report
