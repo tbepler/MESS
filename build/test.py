@@ -38,7 +38,8 @@ def main():
 	c = copy.deepcopy( pwm )
 	for row in c:
 		print row
-		
+	print ''
+	print pwm.nullScoreDistribution( S2, 10 )
 	
 if __name__ == '__main__':
 	main()

@@ -1,5 +1,14 @@
+/*
+
+Author: Tristan Bepler
+
+
+*/
+
 #include <Python.h>
 #include <structmember.h>
+#include "Arrays.h"
+#include "Random.h"
 
 typedef struct {
 	PyObject_HEAD
@@ -197,6 +206,31 @@ inline static double scoreFromIndex( double** matrix, int n, int m, PyObject** e
 	return score;
 }
 
+inline static double scoreLongFromIndex( double** matrix, size_t n, size_t m, long* seq, size_t start )
+{
+	double score = 0;
+	size_t i;
+	long j;
+	for( i = 0 ; i < n ; ++i )
+	{
+		j = seq[ i + start ];
+		score += matrix[i][j];
+	}
+	return score;
+}
+
+inline static void scoreAllLong( double** matrix, size_t n, size_t m,
+				long* seq, size_t len,
+				double* scores, size_t start )
+{
+	size_t end = len - n + 1;
+	size_t i;
+	for( i = 0 ; i < end ; ++i )
+	{
+		scores[ start + i ] = scoreLongFromIndex( matrix, n, m, seq, i );
+	}
+}
+
 static PyObject * PositionWeightMatrix_score( PositionWeightMatrix* self, PyObject* args )
 {
 	PyObject* seq = parseTupleToFastSequence( args );
@@ -320,13 +354,13 @@ static PyTypeObject PositionWeightMatrixType;
 
 static PyObject* PositionWeightMatrix_copy( PositionWeightMatrix* self )
 {
-	//PyObject* args = PositionWeightMatrix_toList( self );
-	//PyObject* tuple = PyTuple_Pack( 1, args );
-	//PyObject* copy = PyObject_CallObject( (PyObject*) &PositionWeightMatrixType, tuple );
-	//Py_DECREF( args );
-	//Py_DECREF( tuple );
-	//return copy;
-	return (PyObject*) self;
+	PyObject* args = PositionWeightMatrix_toList( self );
+	PyObject* tuple = PyTuple_Pack( 1, args );
+	PyObject* copy = PyObject_CallObject( (PyObject*) &PositionWeightMatrixType, tuple );
+	Py_DECREF( args );
+	Py_DECREF( tuple );
+	return copy;
+	//return (PyObject*) self;
 }
 
 static PyObject* PositionWeightMatrix_deepcopy( PositionWeightMatrix* self, PyObject* kywds )
@@ -353,6 +387,72 @@ static PyObject* PositionWeightMatrix_reduce( PositionWeightMatrix* self )
 	
 }
 
+static PyObject* PositionWeightMatrix_nullScoreDistribution( PositionWeightMatrix* self, PyObject* args )
+{
+	PyObject* seq;
+	int reps;
+		
+	if( !PyArg_ParseTuple( args, "Oi", &seq, &reps ) )
+		return NULL;
+	
+	seq = PySequence_Fast( seq, "argument must be iterable" );
+	if( !seq ) return NULL;
+	
+	PyObject** elems = PySequence_Fast_ITEMS( seq );
+	size_t len = PySequence_Fast_GET_SIZE( seq );
+	
+	//allocate array to put elems in
+	long* array = malloc( len * sizeof(long) );
+	size_t i;
+	for( i = 0 ; i < len ; ++i )
+	{
+		array[i] = PyInt_AsLong( elems[i] );
+	}
+	//check for error
+	if( PyErr_Occurred() )
+	{
+		free( array );
+		return NULL;
+	}
+
+	double** matrix = self->matrix;
+	int n = self->n;
+	int m = self->m;
+	
+	//allocate scores array
+	size_t nmers = ( len - n + 1 );
+	size_t lenScores = nmers*reps;
+	double* scores = malloc( lenScores * sizeof( double ) ); 
+	
+	//for each replicate, shuffle and score the sequence
+	int rep = 0;
+	while( rep < reps )
+	{
+		shuffle( array, len, sizeof( long ) );
+		scoreAllLong( matrix, n, m, array, len, scores, nmers * rep );
+		++rep;
+	}
+
+	//sort the scores
+	quicksort( scores, lenScores, sizeof( double ), &compareDoubleDescending );
+	
+	//free the long array
+	free( array );
+	
+	//build a python list to return
+	PyObject* list = PyList_New( lenScores );
+	for( i = 0 ; i < lenScores ; ++i )
+	{
+		PyList_SetItem( list, i, PyFloat_FromDouble( scores[i] ) );
+	}
+	
+	//free the scores array
+	free( scores );
+	
+	return list;
+
+}
+
 static PyMemberDef PositionWeightMatrix_members[] = {
 	{NULL} /* Sentinel */
 };
@@ -366,6 +466,9 @@ static PyMethodDef PositionWeightMatrix_methods[] = {
 	},
 	{"length", (PyCFunction) PositionWeightMatrix_length, METH_NOARGS,
 		"Returns the length of this PWM"
+	},
+	{"nullScoreDistribution", (PyCFunction) PositionWeightMatrix_nullScoreDistribution, METH_VARARGS,
+		"Generates a null score distribution by shuffling and scoring the sequence the specified number of times"
 	},
 	{"toList", (PyCFunction) PositionWeightMatrix_toList, METH_NOARGS,
 		"Converts the PWM to a nested python list"
